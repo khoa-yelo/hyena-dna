@@ -15,7 +15,7 @@ task:
   _name_: lm
   loss: 
     _name_: cross_entropy # potentially create a new cross_entropy loss that includes weights for uncertain tokens
-    ignore_index: 12 # X token (separate anchor-target pairs)
+    ignore_index: 4 # pad token (X token separate anchor-target pairs or N should be replaced to pad if we want to ignore them)
   torchmetrics: ['perplexity', 'num_tokens']
 
 encoder: null

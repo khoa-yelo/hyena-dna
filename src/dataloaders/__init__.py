@@ -1,2 +1,2 @@
-from . import et, genomics
+from . import et, genomics, splash
 from .base import SequenceDataset
