@@ -2,7 +2,7 @@
 defaults:
   - /trainer: default
   - /loader: default
-  - /dataset: hg38
+  - /dataset: splash_pretrain
   - /optimizer: adamw
   - /scheduler: cosine_warmup
   - /callbacks: [base, checkpoint]
