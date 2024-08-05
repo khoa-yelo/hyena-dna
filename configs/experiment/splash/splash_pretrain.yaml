@@ -1,13 +1,13 @@
 # @package _global_
 defaults:
-  - /pipeline: splash
+  - /pipeline: splash_pretrain
   - override /scheduler: cosine_warmup_timm
 
 model:
   _name_: lm
-  d_model: 32
+  d_model: 128
   n_layer: 2
-  d_inner: ${eval:4 * ${.d_model}}
+  d_inner: 512 #${eval:4 * ${.d_model}}
   vocab_size: 13 # include X token to separate among anchor-target pairs
   resid_dropout: 0.0
   embed_dropout: 0.1
@@ -22,10 +22,10 @@ model:
     emb_dim: 5
     filter_order: 64
     short_filter_order: 3
-    l_max: ${eval:${dataset.max_length}+2}
+    l_max: 1026 # dataset.max_length + 2
     modulate: True
     w: 10
-    lr: ${optimizer.lr}
+    lr: 0.001 #${optimizer.lr}
     wd: 0.0
     lr_pos_emb: 0.0
 

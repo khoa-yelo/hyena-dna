@@ -1,6 +1,6 @@
 _name_: splash
 fasta_file: null
-labels_file: null
+label_file: null
 dataset_name: splash
 tokenizer_name: char
 cache_dir: null
