@@ -16,6 +16,7 @@ from src.dataloaders.datasets.genomic_bench_dataset import GenomicBenchmarkDatas
 from src.dataloaders.datasets.nucleotide_transformer_dataset import NucleotideTransformerDataset
 from src.dataloaders.datasets.chromatin_profile_dataset import ChromatinProfileDataset
 from src.dataloaders.datasets.species_dataset import SpeciesDataset
+from src.dataloaders.datasets.splash_dataset import SPLASHDatset
 from src.dataloaders.datasets.icl_genomics_dataset import ICLGenomicsDataset
 from src.dataloaders.datasets.hg38_fixed_dataset import HG38FixedDataset
 
@@ -720,7 +721,144 @@ class HG38Fixed(HG38):
 
         self.dataset_val = self.dataset_train
         self.dataset_test = self.dataset_train
+
     
+class SPLASHDataLoader(HG38):
+    _name_ = "splash"
+    #l_output = 0  # need to set this for decoder to work correctly
+    #TODO: may add back when doing fine-tuning
+
+    def __init__(self, fasta_file, label_file, tokenizer_name=None, dataset_config_name=None, d_output=None, max_length=1024, rc_aug=False,
+                 max_length_val=None, max_length_test=None, cache_dir=None, val_ratio=0.0005, val_split_seed=2357,
+                 add_eos=True, detokenize=False, val_only=False, batch_size=32, batch_size_eval=None, num_workers=1,
+                 shuffle=False, pin_memory=False, drop_last=False, fault_tolerant=False, ddp=False,
+                 fast_forward_epochs=None, fast_forward_batches=None, replace_N_token=False, replace_X_token=True,
+                 task='next_token_pred', remove_tail_ends=False, cutoff_train=0.1, cutoff_test=0.2,
+                 *args, **kwargs):
+                # handle if file paths are None (default paths)
+
+        self.fasta_file = fasta_file
+        if self.fasta_file is None:
+            self.fasta_file = join(default_data_path, self._name_, 'RE_CTGCAG_pSpectral_lt_01.fasta')
+            self.fasta_file = Path(self.fasta_file).expanduser()
+        self.fasta_file = "/scratch/users/khoang99/repos/hyena-dna/data/splash/RE_CTGCAG_pSpectral_lt_01.fasta"
+        print("Default path: ", default_data_path)  
+        print(f"fasta_file: {self.fasta_file}")
+        self.label_file = label_file
+        self.dataset_config_name = dataset_config_name
+        self.tokenizer_name = tokenizer_name
+        self.rc_aug = rc_aug  # reverse compliment augmentation
+        self.cache_dir = None if cache_dir is None else Path(cache_dir).expanduser()
+        self.max_length = max_length
+        self.max_length_val = max_length_val if max_length_val is not None else max_length
+        self.max_length_test = max_length_test if max_length_test is not None else max_length
+        self.val_ratio = val_ratio
+        self.val_split_seed = val_split_seed
+        self.val_only = val_only
+        self.add_eos = add_eos
+        self.detokenize = detokenize
+        self.batch_size = batch_size
+        self.batch_size_eval = batch_size_eval if batch_size_eval is not None else self.batch_size
+        self.num_workers = num_workers
+        self.shuffle = shuffle
+        self.pin_memory = pin_memory
+        self.drop_last = drop_last
+        self.replace_N_token = replace_N_token
+        self.replace_X_token = replace_X_token
+        self.task = task
+        self.remove_tail_ends = remove_tail_ends
+        self.cutoff_train = cutoff_train
+        self.cutoff_test = cutoff_test
+        self.d_output = d_output
+        
+        if fault_tolerant:
+            assert self.shuffle
+        self.fault_tolerant = fault_tolerant
+        if ddp:
+            assert fault_tolerant
+        self.ddp = ddp
+        self.fast_forward_epochs = fast_forward_epochs
+        self.fast_forward_batches = fast_forward_batches
+        if self.fast_forward_epochs is not None or self.fast_forward_batches is not None:
+            assert ddp and fault_tolerant
+
+        self.setup()
+
+    def setup(self, stage=None):
+        if self.tokenizer_name == 'char':
+            print("**Using Char-level tokenizer**")
+            self.tokenizer = CharacterTokenizer(
+                characters=['A', 'C', 'G', 'T', 'N', "X"], # X is for separating anchor-target pairs
+                model_max_length=self.max_length + 2,  # add 2 since default adds eos/eos tokens, crop later
+                add_special_tokens=False,
+            )
+        elif self.tokenizer_name == 'bpe':
+            print("**using pretrained AIRI tokenizer**")
+            self.tokenizer = AutoTokenizer.from_pretrained('AIRI-Institute/gena-lm-bert-base')
+        else:
+            raise ValueError(f"Invalid tokenizer name: {self.tokenizer_name}")
+
+        self.vocab_size = len(self.tokenizer)
+        
+        # Create datasets
+        self.init_datasets()
+
+    def init_datasets(self):
+
+        # delete old datasets
+        # NOTE: For some reason only works to close files for train
+        if hasattr(self, 'dataset_train'):
+            del self.dataset_train
+        if hasattr(self, 'dataset_val'):
+            del self.dataset_val
+        if hasattr(self, 'dataset_test'):
+            del self.dataset_test
+
+
+        # Create all splits: torch datasets
+        self.dataset_train = SPLASHDatset(
+            split='train',
+            fasta_file=self.fasta_file,
+            label_file=self.label_file,
+            max_length=self.max_length,
+            pad_max_length=self.max_length,
+            tokenizer=self.tokenizer,
+            tokenizer_name=self.tokenizer_name,
+            add_eos=self.add_eos,
+            task=self.task,
+            replace_N_token=self.replace_N_token,
+            replace_X_token=self.replace_X_token,
+        )
+
+        self.dataset_val = SPLASHDatset(
+            split='val',
+            fasta_file=self.fasta_file,
+            label_file=self.label_file,
+            max_length=self.max_length,
+            pad_max_length=self.max_length_val,
+            tokenizer=self.tokenizer,
+            tokenizer_name=self.tokenizer_name,
+            add_eos=self.add_eos,
+            task=self.task,
+            replace_N_token=self.replace_N_token,
+            replace_X_token=self.replace_X_token,
+        )
+
+        self.dataset_test = SPLASHDatset(
+            split='test',
+            fasta_file=self.fasta_file,
+            label_file=self.label_file,
+            max_length=self.max_length,
+            pad_max_length=self.max_length_test,
+            tokenizer=self.tokenizer,
+            tokenizer_name=self.tokenizer_name,
+            add_eos=self.add_eos,
+            task=self.task,
+            replace_N_token=self.replace_N_token,
+            replace_X_token=self.replace_X_token,
+        )
+
+        return
 
 # if __name__ == '__main__':
 #     """Quick test using dataloader. Can't call from here though."""
