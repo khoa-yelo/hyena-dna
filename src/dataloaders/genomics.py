@@ -1,6 +1,7 @@
 # Adapted from https://github.com/huggingface/transformers/blob/master/examples/pytorch/language-modeling/run_clm.py
 # Adapted from https://github.com/HazyResearch/flash-attention/blob/main/training/src/datamodules/language_modeling_hf.py
 from pathlib import Path
+import os
 from typing import Any, List, Union
 from torch.utils.data.dataloader import DataLoader, Dataset
 from transformers import AutoTokenizer
@@ -739,10 +740,8 @@ class SPLASHDataLoader(HG38):
 
         self.fasta_file = fasta_file
         if self.fasta_file is None:
-            self.fasta_file = join(default_data_path, self._name_, 'RE_CTGCAG_pSpectral_lt_01.fasta')
+            self.fasta_file = os.path.join(default_data_path, self._name_, 'RE_CTGCAG_pSpectral_lt_01.fasta')
             self.fasta_file = Path(self.fasta_file).expanduser()
-        self.fasta_file = "/scratch/users/khoang99/repos/hyena-dna/data/splash/RE_CTGCAG_pSpectral_lt_01.fasta"
-        print("Default path: ", default_data_path)  
         print(f"fasta_file: {self.fasta_file}")
         self.label_file = label_file
         self.dataset_config_name = dataset_config_name
